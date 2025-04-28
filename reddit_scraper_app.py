@@ -44,12 +44,16 @@ max_posts     = st.sidebar.number_input("Maximum Posts", 1, value=DEFAULT_SETTIN
 scrolls       = st.sidebar.number_input("Number of Scrolls", 1, value=DEFAULT_SETTINGS["scrolls"])
 min_posts     = st.sidebar.number_input("Minimum Posts", 1, value=DEFAULT_SETTINGS["min_posts"])
 headless      = st.sidebar.checkbox("Headless Mode", value=DEFAULT_SETTINGS["headless"])
+username = st.sidebar.text_input("Reddit username")
+password = st.sidebar.text_input("Reddit password")
 keywords      = [k.strip() for k in keywords_str.split(",") if k.strip()]
 
 # ───── scraping ───────────────────────────────────────────────────────
 if st.sidebar.button("Start Scraping"):
     with st.spinner("Scraping Reddit posts…"):
         posts = scrape_subreddit(
+            username=username,
+            password=password,
             subreddit_url=subreddit_url,
             keywords=keywords,
             max_posts=max_posts,

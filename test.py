@@ -120,6 +120,8 @@ def extract_replies(comment) -> list:
     return replies
 
 def scrape_subreddit(
+    username:str,
+    password:str,
     subreddit_url: str,
     keywords: list,
     max_posts: int,
@@ -145,6 +147,17 @@ def scrape_subreddit(
         context  = browser.new_context()
         page     = context.new_page()
 
+        # --- LOGIN STEP ---
+        page.goto("https://www.reddit.com/login/", timeout=60_000)
+        page.wait_for_selector('input#loginUsername')
+
+        page.fill('input#loginUsername', username)
+        page.fill('input#loginPassword', password)
+        page.click('button[type="submit"]')
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(5000)  # Wait a bit for login to complete
+
+        # --- GO TO SUBREDDIT ---
         page.goto(subreddit_url, timeout=60_000)
         page.wait_for_load_state("networkidle")
 
