@@ -59,22 +59,40 @@ if st.sidebar.button("Start Scraping"):
                     rel_f = os.path.relpath(abs_f, data_dir)
                     zf.write(abs_f, rel_f)
 
-        # 4) download buttons
-        col1, col2 = st.columns(2)
+        # 4) download buttons + manual delete
+        col1, col2, col3 = st.columns(3)
+
         with col1:
             with open(csv_path, "rb") as f:
-                st.download_button("Download CSV", f, file_name="reddit_posts.csv", mime="text/csv")
+                st.download_button(
+                    "Download CSV",
+                    f,
+                    file_name="reddit_posts.csv",
+                    mime="text/csv",
+                )
+
         with col2:
             with open(zip_path, "rb") as f:
-                st.download_button("Download data.zip", f, file_name="data.zip", mime="application/zip")
+                st.download_button(
+                    "Download data.zip",
+                    f,
+                    file_name="data.zip",
+                    mime="application/zip",
+                )
 
-    # ───── cleanup local files after buttons are on screen ────────────
-    try:
-        os.remove(csv_path)
-        shutil.rmtree(data_dir, ignore_errors=True)
-        os.remove(zip_path)
-    except FileNotFoundError:
-        pass
+        with col3:
+            delete_now = st.button("🗑️ Delete files", type="primary")
+
+        # ───── delete only if the user clicks the button ────────────────
+        if delete_now:
+            try:
+                os.remove(csv_path)
+                shutil.rmtree(data_dir, ignore_errors=True)
+                os.remove(zip_path)
+                st.success("Temporary files removed.")
+            except FileNotFoundError:
+                st.info("Files already deleted or not found.")
+
 
     # keep the app alive / auto-refresh
     time.sleep(5)
