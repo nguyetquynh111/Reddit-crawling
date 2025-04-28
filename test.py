@@ -148,14 +148,19 @@ def scrape_subreddit(
         page     = context.new_page()
 
         # --- LOGIN STEP ---
-        page.goto("https://www.reddit.com/login/", timeout=60_000)
-        page.wait_for_selector('input#loginUsername')
-
-        page.fill('input#loginUsername', username)
-        page.fill('input#loginPassword', password)
-        page.click('button[type="submit"]')
+        page.goto("https://www.reddit.com/login/", timeout=60000)
         page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(5000)  # Wait a bit for login to complete
+
+        # Fill in the username and password fields
+        page.fill('input[name="username"]', username)
+        page.fill('input[name="password"]', password)
+
+        # Click the login button
+        page.click('button[type="submit"]')
+
+        # Wait for navigation to complete
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(5000)
 
         # --- GO TO SUBREDDIT ---
         page.goto(subreddit_url, timeout=60_000)
