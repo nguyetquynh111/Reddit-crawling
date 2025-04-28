@@ -155,8 +155,12 @@ def scrape_subreddit(
         page.fill('input[name="username"]', username)
         page.fill('input[name="password"]', password)
 
+        # Wait for the login button to become enabled
+        login_button = page.locator('button:has-text("Log In")')
+        login_button.wait_for(state="enabled", timeout=10000)
+
         # Click the login button
-        page.click('button[type="submit"]')
+        login_button.click()
 
         # Wait for navigation to complete
         page.wait_for_load_state("networkidle")
