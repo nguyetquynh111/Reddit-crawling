@@ -1,7 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
 import streamlit as st
 import pandas as pd
 import pathlib, os, shutil, time, zipfile, tempfile
 from test import scrape_subreddit, save_outputs
+import os
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 # ───── default UI values ──────────────────────────────────────────────
 DEFAULT_SETTINGS = {

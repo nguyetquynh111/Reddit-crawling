@@ -4,3 +4,4 @@ streamlit
 playwright
 beautifulsoup4
 tqdm
+python-dotenv
