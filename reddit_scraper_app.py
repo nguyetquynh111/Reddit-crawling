@@ -1,9 +1,15 @@
 import streamlit as st
 import pandas as pd
-import pathlib, os, shutil, time, zipfile, tempfile
+import pathlib, os, shutil, time, zipfile
 from test import scrape_subreddit, save_outputs
-import os
-os.system("playwright install")
+
+# ───── Safe playwright install ────────────────────────────────────────
+def ensure_playwright_installed():
+    if not os.path.exists(os.path.expanduser("~/.cache/ms-playwright")):
+        with st.spinner("Installing Playwright browsers (first time only)…"):
+            os.system("playwright install")
+
+ensure_playwright_installed()
 
 # ───── default UI values ──────────────────────────────────────────────
 DEFAULT_SETTINGS = {
@@ -15,10 +21,21 @@ DEFAULT_SETTINGS = {
     "headless":      True,
     "csv_path":      "reddit_posts_and_first_comments.csv",
     "json_basedir":  pathlib.Path("data"),
+    "zip_path":      "data.zip",
 }
 
 st.set_page_config(page_title="Reddit Scraper", layout="wide")
 st.title("Reddit Scraper")
+
+# ───── Setup Session State ────────────────────────────────────────────
+if "scraped_df" not in st.session_state:
+    st.session_state.scraped_df = None
+if "csv_path" not in st.session_state:
+    st.session_state.csv_path = DEFAULT_SETTINGS["csv_path"]
+if "zip_path" not in st.session_state:
+    st.session_state.zip_path = DEFAULT_SETTINGS["zip_path"]
+if "data_dir" not in st.session_state:
+    st.session_state.data_dir = DEFAULT_SETTINGS["json_basedir"]
 
 # ───── sidebar inputs ─────────────────────────────────────────────────
 st.sidebar.header("Scraping Settings")
@@ -30,7 +47,7 @@ min_posts     = st.sidebar.number_input("Minimum Posts", 1, value=DEFAULT_SETTIN
 headless      = st.sidebar.checkbox("Headless Mode", value=DEFAULT_SETTINGS["headless"])
 keywords      = [k.strip() for k in keywords_str.split(",") if k.strip()]
 
-# ───── scrape & display ───────────────────────────────────────────────
+# ───── scraping ───────────────────────────────────────────────────────
 if st.sidebar.button("Start Scraping"):
     with st.spinner("Scraping Reddit posts…"):
         posts = scrape_subreddit(
@@ -42,58 +59,70 @@ if st.sidebar.button("Start Scraping"):
             min_posts=min_posts,
         )
 
-        # 1) write CSV + JSONs to the paths you asked for
-        csv_path  = DEFAULT_SETTINGS["csv_path"]
-        data_dir  = DEFAULT_SETTINGS["json_basedir"]
+        if not posts:
+            st.warning("No posts found. Try adjusting keywords or subreddit settings.")
+            st.stop()
+
+        # Save outputs
+        csv_path = DEFAULT_SETTINGS["csv_path"]
+        data_dir = DEFAULT_SETTINGS["json_basedir"]
         save_outputs(posts, csv_path=csv_path, json_basedir=data_dir)
 
-        # 2) show dataframe
+        # Read into dataframe
         df = pd.read_csv(csv_path)
-        st.header("Scraped Data")
-        st.dataframe(df, use_container_width=True)
+        st.session_state.scraped_df = df
 
-        # 3) create a zip archive of the data folder
-        zip_path = "data.zip"
+        # Save paths
+        st.session_state.csv_path = csv_path
+        st.session_state.data_dir = data_dir
+
+        # Create zip
+        zip_path = DEFAULT_SETTINGS["zip_path"]
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for root, _, files in os.walk(data_dir):
                 for f in files:
                     abs_f = os.path.join(root, f)
                     rel_f = os.path.relpath(abs_f, data_dir)
                     zf.write(abs_f, rel_f)
+        st.session_state.zip_path = zip_path
 
-        # 4) download buttons + manual delete
-        col1, col2, col3 = st.columns(3)
+        st.success("Scraping done! Scroll down to see the results.")
 
-        with col1:
-            with open(csv_path, "rb") as f:
-                st.download_button(
-                    "Download CSV",
-                    f,
-                    file_name="reddit_posts.csv",
-                    mime="text/csv",
-                )
+# ───── displaying data and downloads ──────────────────────────────────
+if st.session_state.scraped_df is not None:
+    st.header("Scraped Data")
+    st.dataframe(st.session_state.scraped_df, use_container_width=True)
 
-        with col2:
-            with open(zip_path, "rb") as f:
-                st.download_button(
-                    "Download data.zip",
-                    f,
-                    file_name="data.zip",
-                    mime="application/zip",
-                )
+    col1, col2, col3 = st.columns(3)
 
-        with col3:
-            delete_now = st.button("🗑️ Delete files", type="primary")
+    with col1:
+        with open(st.session_state.csv_path, "rb") as f:
+            st.download_button(
+                "Download CSV",
+                f,
+                file_name="reddit_posts.csv",
+                mime="text/csv",
+            )
 
-        # ───── delete only if the user clicks the button ────────────────
-        if delete_now:
+    with col2:
+        with open(st.session_state.zip_path, "rb") as f:
+            st.download_button(
+                "Download data.zip",
+                f,
+                file_name="data.zip",
+                mime="application/zip",
+            )
+
+    with col3:
+        if st.button("🗑️ Delete files", type="primary"):
             try:
-                os.remove(csv_path)
-                shutil.rmtree(data_dir, ignore_errors=True)
-                os.remove(zip_path)
+                os.remove(st.session_state.csv_path)
+                shutil.rmtree(st.session_state.data_dir, ignore_errors=True)
+                os.remove(st.session_state.zip_path)
+                st.session_state.scraped_df = None
                 st.success("Temporary files removed.")
+                time.sleep(2)
+                st.rerun()
             except FileNotFoundError:
                 st.info("Files already deleted or not found.")
-            # keep the app alive / auto-refresh
-            time.sleep(5)
-            st.rerun()
+
