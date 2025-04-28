@@ -1,0 +1,9 @@
+wget
+libnss3
+libatk-bridge2.0-0
+libxss1
+libasound2
+libxcomposite1
+libxrandr2
+libgtk-3-0
+libdrm2
