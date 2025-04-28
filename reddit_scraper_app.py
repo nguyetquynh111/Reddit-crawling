@@ -1,11 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
 import streamlit as st
 import pandas as pd
 import pathlib, os, shutil, time, zipfile, tempfile
 from test import scrape_subreddit, save_outputs
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
+os.system("playwright install")
 
 # ───── default UI values ──────────────────────────────────────────────
 DEFAULT_SETTINGS = {
@@ -96,8 +94,6 @@ if st.sidebar.button("Start Scraping"):
                 st.success("Temporary files removed.")
             except FileNotFoundError:
                 st.info("Files already deleted or not found.")
-
-
-    # keep the app alive / auto-refresh
-    time.sleep(5)
-    st.rerun()
+            # keep the app alive / auto-refresh
+            time.sleep(5)
+            st.rerun()

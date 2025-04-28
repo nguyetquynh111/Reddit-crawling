@@ -1,2 +1,0 @@
-[server]
-folderWatchBlacklist = [".streamlit", ".cache", "data", "playwright", "firefox", "chromium", "webkit", "__pycache__"]
