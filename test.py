@@ -12,7 +12,8 @@ from tqdm import tqdm
 import pandas as pd
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-
+from urllib.parse import urljoin
+from playwright.sync_api import sync_playwright
 
 # ─────────────────────────── USER SETTINGS ──────────────────────────── #
 SUBREDDIT_URL = "https://www.reddit.com/r/webscraping/"
@@ -127,72 +128,70 @@ def scrape_subreddit(
     min_posts: int
 ) -> list[dict]:
     """
-    Main scraper: visit subreddit front page, gather post links,
-    open each post page, parse it.
+    Visit a subreddit, keep scrolling until we collect at least
+    `min_posts` that match `keywords`, or until `max_posts` total
+    post pages have been opened.
     """
     records: list[dict] = []
-    matched_posts: int = 0  # Counter to track how many posts contain the keyword
-    scraped_posts: int = 0  # Counter to track the total number of posts scraped
+    matched_posts: int = 0     # how many keepers we have so far
+    opened_posts:  int = 0     # how many post pages we've opened in total
+    processed_links: int = 0   # index of next <a> to open on the page
+
+    def contains(text: str) -> bool:
+        return any(k.lower() in text.lower() for k in keywords)
 
     with sync_playwright() as pw:
-        browser = pw.firefox.launch(headless=headless)
-        context = browser.new_context()
-        page = context.new_page()
+        browser  = pw.firefox.launch(headless=headless)
+        context  = browser.new_context()
+        page     = context.new_page()
 
         page.goto(subreddit_url, timeout=60_000)
         page.wait_for_load_state("networkidle")
 
-        # ── Loop to keep scraping until we reach the minimum posts or max posts ───────
-        while matched_posts < min_posts and scraped_posts < max_posts:
-            # Scroll if there are not enough posts
-            if scraped_posts < max_posts:
+        # keep going until goal reached or hard cap hit
+        while matched_posts < min_posts and opened_posts < max_posts:
+
+            # if we’ve already consumed the current batch of links, scroll for more
+            links   = page.locator('a[data-testid="post-title"]')
+            n_links = links.count()
+
+            if processed_links >= n_links:                         # nothing new → scroll
                 for _ in range(scrolls):
                     page.mouse.wheel(0, 2500)
                     page.wait_for_timeout(1_000)
+                continue                                           # re-evaluate links after scroll
 
-            # ── Loop through available post links after scrolling ───────────────
-            links = page.locator('a[slot="full-post-link"]')
-            n_links = min(links.count(), max_posts - scraped_posts)
+            # ── open the next unseen link ───────────────────────────────────────
+            anchor = links.nth(processed_links)
+            processed_links += 1            # **advance the cursor immediately**
 
-            for i in range(n_links):
-                if matched_posts >= min_posts:
-                    break  # Stop if we have reached the minimum posts
+            href = anchor.get_attribute("href") or ""
+            full_url = urljoin("https://www.reddit.com", href)
 
-                href = links.nth(scraped_posts).get_attribute("href") or ""
-                question_text = links.nth(scraped_posts).locator("faceplate-screen-reader-content").inner_text()
-
-                # ── NEW EARLY FILTER ────────────────────────────────────────────────
-                if not contains_keywords(href, keywords) and not contains_keywords(question_text, keywords):
-                    scraped_posts += 1
-                    continue   # skip post early, don't even open it
-                # ────────────────────────────────────────────────────────────────────
-
-                full_url = urljoin("https://www.reddit.com", href)
-                post_tab = context.new_page()
+            post_tab = context.new_page()
+            try:
                 post_tab.goto(full_url, timeout=60_000)
                 post_tab.wait_for_load_state("networkidle")
-
-                post = extract_post(post_tab, root_id=href)
+            except Exception as e:
+                print(f"⚠️  could not load {full_url} – {e}")
                 post_tab.close()
+                opened_posts += 1
+                continue
 
-                if not post:
-                    scraped_posts += 1
-                    continue
+            post = extract_post(post_tab, root_id=href)
+            post_tab.close()
+            opened_posts += 1
 
-                # Keep posts whose title/body contain keywords
-                if contains_keywords(post['title'] + " " + post['body'], keywords):
-                    records.append(post)
-                    matched_posts += 1  # Increment when a post matches the keyword
+            if not post:
+                continue
 
-                scraped_posts += 1  # Increment the total scraped posts
+            if not contains(post["title"]) and not contains(post["body"]):
+                continue                                    # skip; no keyword match
 
-            # If not enough posts matched, keep scrolling and retry
-            if matched_posts < min_posts:
-                print(f"Not enough posts found. Scrolling for more...")
-
-            # Break the loop if we've reached the maximum posts
-            if scraped_posts >= max_posts:
-                break
+            # keep the post
+            records.append(post)
+            matched_posts += 1
+            print(f"✔ kept {matched_posts}/{min_posts}: {post['title'][:60]}")
 
         browser.close()
 
@@ -227,8 +226,3 @@ def save_outputs(records: list[dict], csv_path: str, json_basedir: pathlib.Path)
             json.dump(r, fp, ensure_ascii=False, indent=2)
 
     print(f"✔ JSONs → {json_basedir}/<sub>/<slug>/<id>.json")
-
-
-
-# posts = scrape_subreddit()
-# save_outputs(posts)
