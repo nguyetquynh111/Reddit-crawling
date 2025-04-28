@@ -53,6 +53,7 @@ def extract_post(page, root_id: str) -> dict | None:
     Parse the fully-rendered HTML of a single post page and return a dict
     containing the fields we care about *plus* any extra keys you might want.
     """
+    print("Start extracting")
     soup = BeautifulSoup(page.content(), "html.parser")
 
     root = soup.find("shreddit-post")
@@ -60,19 +61,18 @@ def extract_post(page, root_id: str) -> dict | None:
         return None                                   # skip ads / removed posts
 
     # ── title ──────────────────────────────────────────────────────────
-    title = root.get("post-title") or soup.select_one("shreddit-title")
-    if not isinstance(title, str):
-        title = title.get("title", "")
-    title = title.strip()
+    title_tag = root.get("post-title") or soup.select_one('[id^="post-title"][slot="title"]')
+    if not isinstance(title_tag, str):
+        title = title_tag.get("aria-label", "") or title_tag.get_text(strip=True)
+    else:
+        title = title_tag.strip()
+    print("title:", title)
 
-    # ── body (choose the <div … id="t3_xxx-post-rtjson-content" class=md …>) ─
-    body_div = (
-        soup.select_one('div[id$="-post-rtjson-content"].md')
-        or soup.select_one(
-            f'div[id^="{root["id"]}"][id$="-post-rtjson-content"]'
-        )
-    )
+    # ── body (choose the <div … id="t3_xxx-post-rtjson-content" class=md …) ─
+    body_div = soup.select_one('div[id$="-post-rtjson-content"].md')
     body_text = body_div.get_text(" ", strip=True) if body_div else ""
+    print("body_text:", body_text)
+
 
     # ── all comments (depth="0" for answers, and nested comments for replies) ───────────────────────────────────────
     all_comments = []
@@ -207,10 +207,11 @@ def scrape_subreddit(
 
             post_tab = context.new_page()
             try:
-                post_tab.goto(full_url, timeout=60_000)
-                post_tab.wait_for_load_state("networkidle")
+                post_tab.goto(full_url, timeout=30_000)  # lower timeout: 30s is usually enough
+                post_tab.wait_for_load_state("domcontentloaded")  # faster than full 'load'
+                post_tab.wait_for_timeout(5000)
             except Exception as e:
-                print(f"⚠️  could not load {full_url} – {e}")
+                print(f"⚠️ could not load {full_url} – {e}")
                 post_tab.close()
                 opened_posts += 1
                 continue
