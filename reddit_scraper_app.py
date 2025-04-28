@@ -24,7 +24,6 @@ DEFAULT_SETTINGS = {
     "zip_path":      "data.zip",
 }
 
-st.set_page_config(page_title="Reddit Scraper", layout="wide")
 st.title("Reddit Scraper")
 
 # ───── Setup Session State ────────────────────────────────────────────
