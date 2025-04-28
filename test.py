@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 from tqdm import tqdm
 import pandas as pd
 from bs4 import BeautifulSoup
+import time
 from playwright.sync_api import sync_playwright
 from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright
@@ -155,20 +156,34 @@ def scrape_subreddit(
         page.fill('input[name="username"]', username)
         page.fill('input[name="password"]', password)
 
-        # Wait for the login button to become enabled
+        # Locate the login button
         login_button = page.locator('button:has-text("Log In")')
-        login_button.wait_for(state="enabled", timeout=10000)
+
+        # Wait for the login button to become enabled
+        max_wait_time = 10  # seconds
+        start_time = time.time()
+        while True:
+            try:
+                if login_button.is_enabled():
+                    break
+            except PlaywrightTimeoutError:
+                pass
+            if time.time() - start_time > max_wait_time:
+                raise Exception("Login button did not become enabled within the expected time.")
+            time.sleep(0.5)  # Wait before checking again
 
         # Click the login button
         login_button.click()
 
         # Wait for navigation to complete
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("load")
         page.wait_for_timeout(5000)
 
         # --- GO TO SUBREDDIT ---
         page.goto(subreddit_url, timeout=60_000)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("load")
+        page.wait_for_timeout(5000)
+
 
         # keep going until goal reached or hard cap hit
         while matched_posts < min_posts and opened_posts < max_posts:
