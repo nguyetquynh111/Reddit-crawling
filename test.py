@@ -150,7 +150,7 @@ def scrape_subreddit(
 
         # --- LOGIN STEP ---
         page.goto("https://www.reddit.com/login/", timeout=60000)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("load")
 
         # Fill in the username and password fields
         page.fill('input[name="username"]', username)
@@ -184,26 +184,29 @@ def scrape_subreddit(
         page.wait_for_load_state("load")
         page.wait_for_timeout(5000)
 
-        links   = page.locator('a[data-testid="post-title"]')
-        n_links = links.count()
-
         for _ in range(scrolls):
             page.mouse.wheel(0, 2500)
             page.wait_for_timeout(1_000)
 
-        links   = page.locator('a[data-testid="post-title"]')  # re-query after scroll
+        links = page.locator('a[data-testid="post-title"]')
         n_links = links.count()
 
-        for anchor in tqdm(links):
+        for i in range(n_links):
+            if matched_posts >= min_posts or opened_posts >= max_posts:
+                break  # goal reached
 
+            anchor = links.nth(i)
             href = anchor.get_attribute("href") or ""
+            if not href:
+                continue
+
             full_url = urljoin("https://www.reddit.com", href)
 
             post_tab = context.new_page()
             try:
-                post_tab.goto(full_url, timeout=30_000)  # lower timeout: 30s is usually enough
-                post_tab.wait_for_load_state("domcontentloaded")  # faster than full 'load'
-                post_tab.wait_for_timeout(5000)
+                post_tab.goto(full_url, timeout=30_000)
+                post_tab.wait_for_load_state("domcontentloaded")
+                post_tab.wait_for_timeout(5_000)
             except Exception as e:
                 print(f"⚠️ could not load {full_url} – {e}")
                 post_tab.close()
@@ -218,16 +221,15 @@ def scrape_subreddit(
                 continue
 
             if not contains(post["title"]) and not contains(post["body"]):
-                continue                                    # skip; no keyword match
+                continue  # no match, skip
 
-            # keep the post
             records.append(post)
             matched_posts += 1
             print(f"✔ kept {matched_posts}/{min_posts}: {post['title'][:60]}")
 
         browser.close()
 
-    return records
+        return records
 
 
 
