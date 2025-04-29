@@ -184,23 +184,17 @@ def scrape_subreddit(
         page.wait_for_load_state("load")
         page.wait_for_timeout(5000)
 
+        links   = page.locator('a[data-testid="post-title"]')
+        n_links = links.count()
 
-        # keep going until goal reached or hard cap hit
-        while matched_posts < min_posts and opened_posts < max_posts:
+        for _ in range(scrolls):
+            page.mouse.wheel(0, 2500)
+            page.wait_for_timeout(1_000)
 
-            # if we’ve already consumed the current batch of links, scroll for more
-            links   = page.locator('a[data-testid="post-title"]')
-            n_links = links.count()
+        links   = page.locator('a[data-testid="post-title"]')  # re-query after scroll
+        n_links = links.count()
 
-            if processed_links >= n_links:                         # nothing new → scroll
-                for _ in range(scrolls):
-                    page.mouse.wheel(0, 2500)
-                    page.wait_for_timeout(1_000)
-                continue                                           # re-evaluate links after scroll
-
-            # ── open the next unseen link ───────────────────────────────────────
-            anchor = links.nth(processed_links)
-            processed_links += 1            # **advance the cursor immediately**
+        for anchor in tqdm(links):
 
             href = anchor.get_attribute("href") or ""
             full_url = urljoin("https://www.reddit.com", href)
@@ -234,6 +228,7 @@ def scrape_subreddit(
         browser.close()
 
     return records
+
 
 
 def save_outputs(records: list[dict], csv_path: str, json_basedir: pathlib.Path):
