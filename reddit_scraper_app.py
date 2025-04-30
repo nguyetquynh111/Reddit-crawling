@@ -2,6 +2,55 @@ import streamlit as st
 import pandas as pd
 import pathlib, os, shutil, time, zipfile
 from test import scrape_subreddit, save_outputs
+import os
+import time
+import shutil
+import streamlit as st
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+import gdown
+from dotenv import load_dotenv
+load_dotenv()
+
+
+# Replace with your service account key file and folder ID
+SERVICE_ACCOUNT_FILE = st.secrets["SERVICE_ACCOUNT_FILE"]
+FOLDER_ID = st.secrets["FOLDER_ID"]
+FILE_ID = st.secrets["FILE_ID"]
+
+def download_model_from_gdrive():
+    """Download the model from Google Drive if it doesn't exist locally."""
+    model_path = "service_account.json"
+    if not os.path.exists(model_path):
+        print("Downloading model from Google Drive...")
+        url = f"https://drive.google.com/uc?id={FILE_ID}"
+        gdown.download(url, model_path, quiet=False)
+    return model_path
+
+download_model_from_gdrive()
+
+# Authenticate
+credentials = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE,
+    scopes=['https://www.googleapis.com/auth/drive']
+)
+
+drive_service = build('drive', 'v3', credentials=credentials)
+
+def upload_to_drive(file_path, folder_id):
+    file_metadata = {
+        'name': os.path.basename(file_path),
+        'parents': [folder_id]
+    }
+    media = MediaFileUpload(file_path, resumable=True)
+    uploaded_file = drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id'
+    ).execute()
+    return uploaded_file.get('id')
+
 
 # ───── Safe playwright install ────────────────────────────────────────
 def ensure_playwright_installed():
@@ -117,15 +166,23 @@ if st.session_state.scraped_df is not None:
             )
 
     with col3:
-        if st.button("🗑️ Delete files", type="primary"):
+        if st.button("📤 Upload & Delete Files", type="primary"):
             try:
+                # Upload to Google Drive
+                upload_to_drive(st.session_state.csv_path, FOLDER_ID)
+                upload_to_drive(st.session_state.zip_path, FOLDER_ID)
+
+                # Delete local files
                 os.remove(st.session_state.csv_path)
                 shutil.rmtree(st.session_state.data_dir, ignore_errors=True)
                 os.remove(st.session_state.zip_path)
                 st.session_state.scraped_df = None
-                st.success("Temporary files removed.")
+
+                st.success("Files uploaded to Google Drive and deleted locally.")
                 time.sleep(2)
                 st.rerun()
             except FileNotFoundError:
                 st.info("Files already deleted or not found.")
+            except Exception as e:
+                st.error(f"Upload/Delete failed: {str(e)}")
 
