@@ -141,11 +141,11 @@ async def main():
             for a in anchors:
                 href = await a.get_attribute("href")
                 if href and "/comments/" in href:
-                    full = "https://www.reddit.com" + href
-                    if full not in seen:          # chỉ extract link mới
-                        seen.add(full)
-                        print("Extract:", full)
-                        extract_post(full, headers)
+                    url = "https://www.reddit.com" + href
+                    if url not in seen:          # chỉ extract link mới
+                        seen.add(url)
+                        print("Extract:", url)
+                        extract_post(url, headers)
                         # nghỉ random cho an toàn
                         time.sleep(random.uniform(2, 5))
 
